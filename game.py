@@ -4,7 +4,6 @@ import random
 import sys
 import keyboard
 
-pygame.init()
 
 
 class Snake:
@@ -26,10 +25,9 @@ class Snake:
     def draw(self, gui):
         for x in self.tail:
             if x == [self.x, self.y]:
-                pygame.draw.rect(gui, (175, 255, 0), [x[0], x[1], CELL_W, CELL_W])
+                pygame.draw.rect(gui, (175, 255, 0), [x[0]+1, x[1]+1, CELL_W-1, CELL_W-1])
             else:
-                pygame.draw.rect(gui, (0, 255, 0), [x[0], x[1], CELL_W, CELL_W])
-            pygame.draw.rect(gui, (120, 120, 120), [x[0], x[1], CELL_W, CELL_W], 2)
+                pygame.draw.rect(gui, (0, 255, 0), [x[0]+1, x[1]+1, CELL_W-1, CELL_W-1])
 
 
 class Apple:
@@ -38,8 +36,7 @@ class Apple:
         self.y = random.randint(0, NUM_CELLS - 1) * CELL_W
 
     def draw(self, gui):
-        pygame.draw.rect(gui, (255, 0, 100), [self.x, self.y, CELL_W, CELL_W])
-        pygame.draw.rect(gui, (120, 120, 120), [self.x, self.y, CELL_W, CELL_W], 2)
+        pygame.draw.rect(gui, (255, 0, 100), [self.x+1, self.y+1, CELL_W-1, CELL_W-1])
 
 
 class SnakeGame:
@@ -50,136 +47,72 @@ class SnakeGame:
         self.snake = Snake()
         self.apple = Apple()
         self.timer = pygame.time.Clock()
+        self.numMoves = 100
 
     def relocateApple(self):
         # relocates the apple where the snake is not
         possible = []
-        for i in range(0, GUI, CELL_W):
-            for j in range(0, GUI, CELL_W):
+        for i in range(0, GUI-CELL_W, CELL_W):
+            for j in range(0, GUI-CELL_W, CELL_W):
                 if not [i, j] in self.snake.tail:
                     possible.append([i, j])
         return random.choice(possible)
 
-    def play(self):
-        while not self.game_over:
-            self.gui.fill((51, 51, 51))
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
-            ret = self.checkForPress()
-            if ret is not None:
-                self.snake.dir = ret
-
-            # self.snake.update()
-            self.snake.draw(self.gui)
-            self.apple.draw(self.gui)
-
-            if self.snake.tail[-1] == [self.apple.x, self.apple.y]:
-                # eaten!
-                self.snake.length += 1
-                newCoords = self.relocateApple()
-                self.apple.x = newCoords[0]
-                self.apple.y = newCoords[1]
-                self.score += 1
-
-            if self.checkForDeath() != 0:
-                self.game_over = True
-
-            pygame.display.set_caption(str(self.generate_inputs()))
-            pygame.display.update()
-            self.timer.tick(FPS)
-
     def generate_inputs(self):
-        inps = []
-        # directions
-        directions = [
-            [-1, -1],
-            [0, -1],
-            [1, -1],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-            [-1, 1],
-            [-1, 0],
-        ]
+        """
+        Generates inputs for the neural network.
+        Inputs:
+            - Normalized distances to wall, apple, and body in cardinal directions.
+            - Relative position of the apple (x and y direction).
+            - One-hot encoding of the snake's current direction.
+        """
+        inputs = []
+
+        # Cardinal directions: right, down, left, up
+        directions = [[1, 0], [0, 1], [-1, 0], [0, -1]]
+
         for direction in directions:
-            wallDist = 1.0
-            foodDist = 0.0
-            snakeDist = 0.0
-            # if I am touching the wall in every direction, walldist is 0
-            x = self.snake.x + direction[0] * CELL_W
-            y = self.snake.y + direction[1] * CELL_W
-            if not (0 <= x <= GUI - CELL_W and 0 <= y <= GUI - CELL_W):
-                wallDist = 0
-            while 0 <= x <= GUI - CELL_W and 0 <= y <= GUI - CELL_W:
-                if [x, y] == [self.apple.x, self.apple.y]:
-                    foodDist = 1.0
-                if [x, y] in self.snake.tail[0 : len(self.snake.tail) - 1]:
-                    snakeDist = 1
+            x, y = self.snake.x, self.snake.y
+            distance_to_wall = 0
+            distance_to_apple = 0
+            body_present = 0
+
+            # Calculate distance to wall
+            while 0 <= x < GUI and 0 <= y < GUI:
                 x += direction[0] * CELL_W
                 y += direction[1] * CELL_W
-            inps.append(wallDist)
-            inps.append(foodDist)
-            inps.append(snakeDist)
-        # extra stuff :
+                distance_to_wall += 1
 
-        # head dir
-        if self.snake.dir == [0, -1]:
-            inps.append(1)
-            inps.append(0)
-            inps.append(0)
-            inps.append(0)
-        elif self.snake.dir == [-1, 0]:
-            inps.append(0)
-            inps.append(1)
-            inps.append(0)
-            inps.append(0)
-        elif self.snake.dir == [0, 1]:
-            inps.append(0)
-            inps.append(0)
-            inps.append(1)
-            inps.append(0)
-        elif self.snake.dir == [1, 0]:
-            inps.append(0)
-            inps.append(0)
-            inps.append(0)
-            inps.append(1)
+                # Check for apple
+                if x == self.apple.x and y == self.apple.y and distance_to_apple == 0:
+                    distance_to_apple = distance_to_wall
 
-        # tail dir
-        if len(self.snake.tail) == 1:
-            inps.append(0)
-            inps.append(0)
-            inps.append(0)
-            inps.append(0)
-        else:
-            # calculate the direction of the tail
-            print(self.snake.tail)
-            tail = self.snake.tail[0]
-            sec = self.snake.tail[1]
-            x = sec[0] - tail[0]
-            y = sec[1] - tail[1]
+                # Check for body
+                if [x, y] in self.snake.tail:
+                    body_present = 1
+                    break
 
-            if x == 0 and y == -CELL_W:  # up
-                inps.append(1)
-                inps.append(0)
-                inps.append(0)
-                inps.append(0)
-            elif x == 0 and y == CELL_W:  # down
-                inps.append(0)
-                inps.append(0)
-                inps.append(1)
-                inps.append(0)
-            elif x == -CELL_W and y == 0:  # left
-                inps.append(0)
-                inps.append(1)
-                inps.append(0)
-                inps.append(0)
-            elif x == CELL_W and y == 0:  # right
-                inps.append(0)
-                inps.append(0)
-                inps.append(0)
-                inps.append(1)
-        return inps
+            # Normalize distances
+            inputs.append(1 / (distance_to_wall + 1))  # Avoid division by zero
+            inputs.append(1 / (distance_to_apple + 1) if distance_to_apple > 0 else 0)
+            inputs.append(body_present)
+
+        # Add relative apple position
+        relative_x = (self.apple.x - self.snake.x) / GUI
+        relative_y = (self.apple.y - self.snake.y) / GUI
+        inputs.extend([relative_x, relative_y])
+
+        # Add current movement direction as one-hot encoding
+        direction_one_hot = [
+            int(self.snake.dir == [1, 0]),  # Right
+            int(self.snake.dir == [0, 1]),  # Down
+            int(self.snake.dir == [-1, 0]),  # Left
+            int(self.snake.dir == [0, -1])   # Up
+        ]
+        inputs.extend(direction_one_hot)
+
+        return inputs
+
 
     def checkForDeath(self):
         if not (
@@ -192,6 +125,8 @@ class SnakeGame:
             0 : len(self.snake.tail) - 1
         ]:
             return 3
+        if self.numMoves == 0:
+            return 4
         return 0
 
     def checkForPress(self, key=None):
@@ -219,10 +154,3 @@ class SnakeGame:
                 return None
 
 
-if __name__ == "__main__":
-    test = SnakeGame()
-
-    test.apple.x = 60
-    test.apple.y = 60
-    print(len(test.generate_inputs()))
-    test.play()
