@@ -11,8 +11,8 @@ class Snake:
         self.x = START_X
         self.y = START_Y
         self.dir = [1, 0]
-        self.tail = [[self.x, self.y]]
-        self.length = 1
+        self.tail = [[self.x-2*CELL_W, self.y], [self.x-CELL_W, self.y], [self.x, self.y]]
+        self.length = 3
 
     def update(self):
         self.x += self.dir[0] * CELL_W
@@ -52,67 +52,45 @@ class SnakeGame:
     def relocateApple(self):
         # relocates the apple where the snake is not
         possible = []
-        for i in range(0, GUI-CELL_W, CELL_W):
-            for j in range(0, GUI-CELL_W, CELL_W):
+        for i in range(0, GUI, CELL_W):
+            for j in range(0, GUI, CELL_W):
                 if not [i, j] in self.snake.tail:
                     possible.append([i, j])
         return random.choice(possible)
 
     def generate_inputs(self):
-        """
-        Generates inputs for the neural network.
-        Inputs:
-            - Normalized distances to wall, apple, and body in cardinal directions.
-            - Relative position of the apple (x and y direction).
-            - One-hot encoding of the snake's current direction.
-        """
-        inputs = []
+        inps = []
+        directions = [[0, -1], [-1, 0], [0, 1], [1, 0]]#, [-1, -1], [1, -1], [1, 1], [-1, 1]]
+        for d in directions:
+            copySnake = self.snake.tail[-1].copy()
+            copyHead = [d[0]*CELL_W + copySnake[0], d[1]*CELL_W + copySnake[1]]
+            touchingWall = int(not (0 <= copyHead[0] < GUI and 0 <= copyHead[1] < GUI))
+            touchingSelf = int(copyHead in self.snake.tail)
+            inps.append(touchingWall)
+            inps.append(touchingSelf)
 
-        # Cardinal directions: right, down, left, up
-        directions = [[1, 0], [0, 1], [-1, 0], [0, -1]]
-
-        for direction in directions:
-            x, y = self.snake.x, self.snake.y
-            distance_to_wall = 0
-            distance_to_apple = 0
-            body_present = 0
-
-            # Calculate distance to wall
-            while 0 <= x < GUI and 0 <= y < GUI:
-                x += direction[0] * CELL_W
-                y += direction[1] * CELL_W
-                distance_to_wall += 1
-
-                # Check for apple
-                if x == self.apple.x and y == self.apple.y and distance_to_apple == 0:
-                    distance_to_apple = distance_to_wall
-
-                # Check for body
-                if [x, y] in self.snake.tail:
-                    body_present = 1
+            # extend until apple is found or wall is reached
+            copyHead = self.snake.tail[-1].copy()
+            appleFound = 0
+            while(0 <= copyHead[0] < GUI and 0 <= copyHead[1] < GUI):
+                if (copyHead[0] == self.apple.x and copyHead[1] == self.apple.y):
+                    appleFound = 1
                     break
+                copyHead[0] += d[0]*CELL_W
+                copyHead[1] += d[1]*CELL_W
+            inps.append(appleFound)
 
-            # Normalize distances
-            inputs.append(1 / (distance_to_wall + 1))  # Avoid division by zero
-            inputs.append(1 / (distance_to_apple + 1) if distance_to_apple > 0 else 0)
-            inputs.append(body_present)
+        if self.snake.dir == [0, -1]:
+            inps.extend([1, 0, 0, 0])
+        elif self.snake.dir == [-1, 0]:
+            inps.extend([0, 1, 0, 0])
+        elif self.snake.dir == [0, 1]:
+            inps.extend([0, 0, 1, 0])
+        elif self.snake.dir == [1, 0]:
+            inps.extend([0, 0, 0, 1])
 
-        # Add relative apple position
-        relative_x = (self.apple.x - self.snake.x) / GUI
-        relative_y = (self.apple.y - self.snake.y) / GUI
-        inputs.extend([relative_x, relative_y])
-
-        # Add current movement direction as one-hot encoding
-        direction_one_hot = [
-            int(self.snake.dir == [1, 0]),  # Right
-            int(self.snake.dir == [0, 1]),  # Down
-            int(self.snake.dir == [-1, 0]),  # Left
-            int(self.snake.dir == [0, -1])   # Up
-        ]
-        inputs.extend(direction_one_hot)
-
-        return inputs
-
+        return inps
+            
 
     def checkForDeath(self):
         if not (
@@ -154,3 +132,6 @@ class SnakeGame:
                 return None
 
 
+if __name__ == "__main__":
+    testGame = SnakeGame()
+    print(testGame.generate_inputs())

@@ -4,6 +4,7 @@ from settings import *
 import pygame
 import sys
 import numpy as np
+import keyboard
 
 snake = []
 ai = []
@@ -44,22 +45,11 @@ for cur_gen in range(1, NUM_GEN + 1):
                 new_coords = i.relocateApple()
                 i.apple.x, i.apple.y = new_coords
                 i.score += 10  # Reward for eating apple
-                i.numMoves += 100  # Extra moves for apple
+                i.numMoves += MOVE_INC  # Extra for apple
 
             # Encourage movement toward the apple
             prev_distance = abs(i.snake.x - i.apple.x) + abs(i.snake.y - i.apple.y)
-            cur_distance = abs(i.snake.tail[-1][0] - i.apple.x) + abs(i.snake.tail[-1][1] - i.apple.y)
-
-            if cur_distance < prev_distance:
-                i.score += 0.1  # Reward for getting closer
-            else:
-                i.score -= 0.1  # Penalty for moving away
-
-            # Penalize spinning in place
-            if len(i.snake.tail) > 3 and i.snake.tail[-1] == i.snake.tail[-3]:
-                i.score -= 0.5  # Discourage repetitive moves
-
-            
+            cur_distance = abs(i.snake.tail[-1][0] - i.apple.x) + abs(i.snake.tail[-1][1] - i.apple.y)            
 
             if i.checkForDeath() != 0:
                 i.game_over = True
@@ -74,6 +64,11 @@ for cur_gen in range(1, NUM_GEN + 1):
             i.score += 1e-4
             i.numMoves -= 1
 
+            if (keyboard.is_pressed("s")):
+                PYGAME_LOOK_AFTER_GEN = 0
+            elif keyboard.is_pressed("p"):
+                PYGAME_LOOK_AFTER_GEN = NUM_GEN
+
         c += 1
 
     # Adjust scoring mechanism
@@ -82,8 +77,12 @@ for cur_gen in range(1, NUM_GEN + 1):
             if snake[i].score < snake[j].score:
                 snake[i], snake[j] = snake[j], snake[i]
                 ai[i], ai[j] = ai[j], ai[i]
-
-    print(f"Generation {cur_gen}: {snake[0].score}")
+    # average scores
+    totScore = 0
+    for s in snake:
+        totScore += s.score
+    totScore /= len(snake)
+    print(f"Generation {cur_gen}: {snake[0].score}" + "  | Average: " + str(totScore))
 
     # Improved selection mechanism
     new_gen = ai[:NUM_ELITES]

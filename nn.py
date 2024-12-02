@@ -1,6 +1,7 @@
 import numpy as np
+import game
 
-MODEL = [18, 12, 8, 4]  # Input, two hidden layers, output
+MODEL = [len(game.SnakeGame().generate_inputs()), 10, 7, 4]  # Input, two hidden layers, output
 
 
 class SnakeNN:
@@ -17,6 +18,8 @@ class SnakeNN:
         return exps / np.sum(exps)
     def tanh(self, x):
         return np.tanh(x)
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
     
     def forward(self, inp):
         assert len(inp) == MODEL[0], "Input size mismatch"
